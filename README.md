@@ -11,7 +11,7 @@ https://www.cs.princeton.edu/~funk/sgp09.pdf
 
 This project relies on the following libraries:
 
-OpenGL, OpenMP, Eigen 3.0+, Glib, GTS, libIgl, python3
+OpenGL, OpenMP, Eigen 3.0+, Glib, GTS, libIgl, python3, SFML
 
 This project relies on the following projects:
 
