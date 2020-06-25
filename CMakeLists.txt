@@ -1,0 +1,47 @@
+project(interior_df)
+cmake_minimum_required(VERSION 3.0)
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(PROJECT_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include_directories( BEFORE ./ ./include )
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_FLAGS " -lstdc++ -lm ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O3")
+
+find_package(SFML REQUIRED COMPONENTS graphics window system )
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(Python COMPONENTS Development NumPy)
+find_package(OpenGL)
+find_package(OpenMP)
+find_package(GTS)
+find_package(PkgConfig REQUIRED)
+pkg_search_module(GLIB REQUIRED glib-2.0)
+include_directories(${GLIB_INCLUDE_DIRS})
+
+add_definitions(-DUSE_MATPLOTLIB)
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    message("clang compiler is used!")
+    set(CMAKE_CXX_FLAGS "-fopenmp=libomp ${CMAKE_CXX_FLAGS}")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+    message("intel compiler is used!")
+    set(CMAKE_CXX_FLAGS "-qopenmp ${CMAKE_CXX_FLAGS}")
+else()
+    message("gcc compiler is used!")
+    set(CMAKE_CXX_FLAGS "-fopenmp ${CMAKE_CXX_FLAGS}")
+endif()
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -qopt-report=5 -xCORE-AVX2")
+endif()
+
+link_directories("${CMAKE_CURRENT_SOURCE_DIR}/HIDF/external/libIgl/lib")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/external/libIgl/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/external")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/include")
+
+add_subdirectory(samples)
+add_subdirectory(IDF)
