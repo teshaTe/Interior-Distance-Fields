@@ -12,6 +12,7 @@
 #include <igl/marching_tets.h>
 #include <igl/parula.h>
 #include <igl/boundary_loop.h>
+#include <igl/mat_max.h>
 
 #include <gts.h>
 #include <iostream>
@@ -58,34 +59,6 @@ void IDFdiffusion::computeIDF_polygon2D(GtsIsoCartesianFunc func, const Eigen::V
     computeInteriorDF2D(Vmb, Vm, srcP);
 }
 
-void IDFdiffusion::findZeroLevelSet2D(const std::vector<float> func, int resX, int resY)
-{
-    float eps = 1000.0f * std::numeric_limits<float>::epsilon();
-    std::vector<Eigen::Vector2d> pointsB, pointsIN;
-    for(int y = 0; y < resY; y++)
-        for(int x = 0; x< resX; x++)
-        {
-            if(func[x+y*resX] >= 0.0f && func[x+y*resX] <= eps)
-            {
-                Eigen::Vector2d pB(x*16.0f/(float)resX, y*16.0f/(float)resY);
-                pointsB.push_back(pB);
-            }
-            else if(func[x+y*resX] >= 0.0f)
-            {
-                Eigen::Vector2d pIN(x*16.0f/(float)resX, y*16.0f/(float)resY);
-                pointsIN.push_back(pIN);
-            }
-        }
-
-    V.resize(pointsB.size(), 2);
-    for(int i = 0; i < pointsB.size(); i++)
-        V.row(i) = pointsB[i];
-
-    Vm.resize(pointsIN.size(), 2);
-    for(int i = 0; i < pointsIN.size(); i++)
-        Vm.row(i) = pointsIN[i];
-}
-
 void IDFdiffusion::computeIDF_mesh3D(const Eigen::MatrixXd &meshVerts, const Eigen::MatrixXi &meshFaces,
                                      const Eigen::Vector3d &srcP, const int eigVecNumber, double kernelBandW)
 {
@@ -95,18 +68,27 @@ void IDFdiffusion::computeIDF_mesh3D(const Eigen::MatrixXd &meshVerts, const Eig
     computeInteriorDF3D(meshVerts, TVm, meshFaces, srcP);
 }
 
-void IDFdiffusion::computeIDF_mesh3D(GtsIsoCartesianFunc func, const Eigen::Vector3d &srcP,
-                                     const Eigen::Vector3i gridRes, double iso, const int eigVecNumber,
-                                     double kernelBandW)
+void IDFdiffusion::computeIDF_mesh3D(GtsIsoCartesianFunc func, const Eigen::Vector3d &srcP, const Eigen::Vector3i gridRes,
+                                     double iso, const int eigVecNumber, double kernelBandW)
 {
     resetParams();
-    getSurfaceComponents3D(func, gridRes, iso, V, F);
+    Eigen::VectorXd maxV;
     Eigen::VectorXi I;
+
+    getSurfaceComponents3D(func, gridRes, iso, V, F);
     igl::remove_duplicates(V, F, Vm, Fm, I);
 
-    computeDiffusionMap(Vm.cast<float>(), eigVecNumber, kernelBandW);
     igl::copyleft::tetgen::tetrahedralize(Vm, Fm, "pq1.414Y", TVm, Tm, TFm);
+    computeDiffusionMap(Vm.cast<float>(), eigVecNumber, kernelBandW);
     computeInteriorDF3D(Vm, TVm, Fm, srcP);
+}
+
+void IDFdiffusion::computeIDF_slice(const Eigen::MatrixXd &meshVerts, const Eigen::MatrixXi &meshFaces, const Eigen::Vector3d &srcP, const int eigVecNumber, double kernelBandW)
+{
+    resetParams();
+    computeDiffusionMap(meshVerts.cast<float>(), eigVecNumber, kernelBandW);
+    igl::copyleft::tetgen::tetrahedralize(meshVerts, meshFaces, "pq1.414Y", TVm, Tm, TFm);
+    iterateIDF_slice(meshVerts, meshFaces, srcP);
 }
 
 void IDFdiffusion::computeIDF_slice(GtsIsoCartesianFunc func, const Eigen::Vector3d &srcP,
@@ -114,12 +96,14 @@ void IDFdiffusion::computeIDF_slice(GtsIsoCartesianFunc func, const Eigen::Vecto
                                     double kernelBandW)
 {
     resetParams();
-    getSurfaceComponents3D(func, gridRes, iso, V, F);
     Eigen::VectorXi I;
+
+    getSurfaceComponents3D(func, gridRes, iso, V, F);
     igl::remove_duplicates(V, F, Vm, Fm, I);
 
     computeDiffusionMap(Vm.cast<float>(), eigVecNumber, kernelBandW);
     igl::copyleft::tetgen::tetrahedralize(Vm, Fm, "pq1.414Y", TVm, Tm, TFm);
+
     iterateIDF_slice(Vm, Fm, srcP);
 }
 
@@ -140,6 +124,8 @@ static void pick_first_face (GtsFace * f, GtsFace ** first)
     *first = f;
 }
 
+
+//This function uses GTS for triangulating the functionally defined object with chossen level-set
 void IDFdiffusion::getSurfaceComponents2D(GtsIsoCartesianFunc func, const Eigen::Vector3i gridRes,
                                                double iso, Eigen::MatrixXd &V, Eigen::MatrixXi &E)
 {
@@ -150,11 +136,13 @@ void IDFdiffusion::getSurfaceComponents2D(GtsIsoCartesianFunc func, const Eigen:
     g.ny = gridRes.y();
     g.nz = gridRes.z();
 
+    //here we specify the computational grid
     /* interval is [-10:10][-10:10][-10:10] */
     g.x = -10.0; g.dx = 20./(gdouble) (g.nx - 1);
     g.y = -10.0; g.dy = 20./(gdouble) (g.ny - 1);
     g.z = -10.0; g.dz = 20./(gdouble) (g.nz - 1);
 
+    //then we define the new surface, in gts it is a tree structure with components: vertexes, edges, faces
     surface = gts_surface_new (gts_surface_class (),
                                gts_face_class (),
                                gts_edge_class (),
@@ -162,11 +150,14 @@ void IDFdiffusion::getSurfaceComponents2D(GtsIsoCartesianFunc func, const Eigen:
     gts_isosurface_cartesian (surface, g, func, NULL, iso);
     gts_surface_print_stats (surface, stderr);
 
+    //extract boundary from the 2D function
     GSList *edgesB = gts_surface_boundary(surface);
 
     int i = 0;
     std::vector<Eigen::Vector2i> edges;
     std::vector<Eigen::Vector2d> verts;
+
+    //process obtained edges to get vertexes that form them
     while(edgesB)
     {
         GtsEdge *e = GTS_EDGE(edgesB->data);
@@ -179,6 +170,7 @@ void IDFdiffusion::getSurfaceComponents2D(GtsIsoCartesianFunc func, const Eigen:
         i+=2;
     }
 
+    //store vertexes and edges for further processing
     V.resize(verts.size(), 2);
     for(int i = 0; i < verts.size(); i++)
         V.row(i) = verts[i];
@@ -187,7 +179,6 @@ void IDFdiffusion::getSurfaceComponents2D(GtsIsoCartesianFunc func, const Eigen:
     for(int i = 0; i < edges.size(); i++)
         E.row(i) = edges[i];
 }
-
 
 void IDFdiffusion::getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen::Vector3i gridRes,
                                                double iso, Eigen::MatrixXd &V, Eigen::MatrixXi &F)
@@ -199,11 +190,13 @@ void IDFdiffusion::getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen:
     g.ny = gridRes.y();
     g.nz = gridRes.z();
 
+    //here we specify the computational grid
     /* interval is [-10:10][-10:10][-10:10] */
     g.x = -10.0; g.dx = 20./(gdouble) (g.nx - 1);
     g.y = -10.0; g.dy = 20./(gdouble) (g.ny - 1);
     g.z = -10.0; g.dz = 20./(gdouble) (g.nz - 1);
 
+    //then we define the new surface, in gts it is a tree structure with components: vertexes, edges, faces
     surface = gts_surface_new (gts_surface_class (),
                                gts_face_class (),
                                gts_edge_class (),
@@ -211,6 +204,8 @@ void IDFdiffusion::getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen:
     gts_isosurface_cartesian (surface, g, func, NULL, iso);
     gts_surface_print_stats (surface, stderr);
 
+    //set up function for parsing the faces of the triangulated mesh
+    //here we need to specify a manual static function 'pick_first_face' to pick the first face
     GtsFace *first = NULL;
     gts_surface_foreach_face (surface, (GtsFunc) pick_first_face, &first);
     GtsRange depth_range; gts_range_init (&depth_range);
@@ -221,9 +216,12 @@ void IDFdiffusion::getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen:
 
     if (first)
     {
+        //preparing to traverse the surface tree
         GtsSurfaceTraverse * t = gts_surface_traverse_new(surface, first);
         GtsFace * f;
         guint level;
+
+        //actual surface straversing
         while ((f = gts_surface_traverse_next (t, &level)))
         {
             GtsVertex *v1, *v2, *v3;
@@ -240,9 +238,10 @@ void IDFdiffusion::getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen:
         gts_surface_traverse_destroy (t);
     }
 
-    V.resize(verts.size(), 2);
+    //storing vertexes and faces for further computations
+    V.resize(verts.size(), 3);
     for(int i = 0; i < verts.size(); i++)
-        V.row(i) = Eigen::Vector2d(verts[i].x(), verts[i].y());
+        V.row(i) = Eigen::Vector3d(verts[i].x(), verts[i].y(), verts[i].z());
 
     F.resize(faces.size(), 3);
     for(int i = 0; i < faces.size(); i++)
@@ -258,8 +257,41 @@ void IDFdiffusion::iterateIDF_slice(const Eigen::MatrixXd &surfMeshV, const Eige
     igl::opengl::glfw::Viewer viewer;
     update_visualization(viewer);
     viewer.callback_key_down = std::bind(&IDFdiffusion::key_down, this, std::placeholders::_1,
-                                                std::placeholders::_2, std::placeholders::_3);
+                                                 std::placeholders::_2, std::placeholders::_3);
     viewer.launch();
+}
+
+Eigen::MatrixXf IDFdiffusion::computePairwiseDist()
+{
+    //computing distances on the boundary of the mesh/polygon using diffusion map;
+    Eigen::MatrixXf D_ij; D_ij.resize(eigVecs.rows(), eigVecs.rows());
+
+    float t =1.0f/ (8.0f * eigVals[1]);
+    float dSq = 0.0f;
+    float eps = 1e-6;
+
+    /*here we compute pair-wise distances according to Rustamov et. al.
+    * Interior distance using barycentric coordinates, section 4, p. 4
+    * equation for diffusion distance d^2(v_i,v_j)=sum(exp(-2*l_k*t)*(phi_k(v_i) - phi_k(v_j))^2); l_k - eigen values
+    * eigVals and eigVecs are obtained as a result of the diffusion map computation on the boundary of the mesh
+    */
+    std::cout << "Stage: starting computing diffusion distances on the boundary." << std::endl;
+    for(int i = 0; i < eigVecs.rows(); i++)
+        for(int j = 0; j < eigVecs.rows(); j++)
+        {
+            for(int k = 0; k < eigVecs.cols(); k++)
+            {
+                if(std::exp(-eigVals[k]*t) > eps) // condition to choose eigen vectors, more details Rustamov, Apendix A
+                {
+                    float eigDiff = eigVecs(i, k) - eigVecs(j , k);
+                    dSq += std::exp(-2.0f * t * eigVals[k]) * eigDiff * eigDiff;
+                }
+            }
+            D_ij(i, j) = dSq;
+            dSq = 0.0f;
+        }
+    std::cout << "Stage: finished.\n" << std::endl;
+    return D_ij;
 }
 
 void IDFdiffusion::computeInteriorDF2D(const Eigen::MatrixXd &surfMeshV, const Eigen::MatrixXd &inVerts, const Eigen::VectorXd &srcP)
@@ -269,33 +301,22 @@ void IDFdiffusion::computeInteriorDF2D(const Eigen::MatrixXd &surfMeshV, const E
 
     std::cout << "Stage: starting computing IDF." << std::endl;
 
-    //computing distances on the boundary of the mesh/polygon using diffusion map;
-    Eigen::MatrixXf D_ij; D_ij.resize(eigVecs.rows(), eigVecs.rows());
-    float t =1.0f/ (8.0f * eigVals[1]);
-    float dSq = 0.0f;
-
-    std::cout << "Stage: starting computing diffusion distances on the boundary." << std::endl;
-    for(int i = 0; i < eigVecs.rows(); i++)
-        for(int j = 0; j < eigVecs.rows(); j++)
-        {
-            for(int k = 1; k < eigVecs.cols(); k++)
-            {
-                float eigDiff = eigVecs(i, k) - eigVecs(j , k);
-                dSq += std::pow(eigVals[k], 2.0f * t) * eigDiff * eigDiff;
-            }
-            D_ij(i, j) = dSq;
-            dSq = 0.0f;
-        }
-    std::cout << "Stage: finished.\n" << std::endl;
+    Eigen::MatrixXf D_ij;
+    /*here we compute pair-wise distances according to Rustamov et. al.
+    * Interior distance using barycentric coordinates, section 4, p. 4
+    * equation for diffusion distance d^2(v_i,v_j)=sum(exp(-2*l_k*t)*(phi_k(v_i) - phi_k(v_j))^2); l_k - eigen values
+    * eigVals and eigVecs are obtained as a result of the diffusion map computation on the boundary of the mesh
+    */
+    D_ij = computePairwiseDist();
 
     std::vector<Eigen::Vector2d> meshPoints;
     for(size_t i = 0; i < surfMeshV.rows(); i++)
         meshPoints.push_back(surfMeshV.row(i));
 
-    float dSum1 = 0.0f, dSum2 = 0.0f;
-    IDF.resize(inVerts.rows());
-
-    //computing mean-value coordinates; 1st: compute them for the source point srcP;
+    /* Computing mean-value coordinates and barycentric interpolation
+     * to extend boundary distances to interior of the mesh;
+     * 1st: compute them for the source point srcP;
+     */
     idf::baryCoords mvc;
     Eigen::VectorXf baryW1 = mvc.meanValueCoords2D(meshPoints, srcP);
 
@@ -303,12 +324,21 @@ void IDFdiffusion::computeInteriorDF2D(const Eigen::MatrixXd &surfMeshV, const E
     std::cout << "Total points to process: " << inVerts.rows() << std::endl;
     prof::timer time;
     Eigen::VectorXf baryW2;
-    //2nd: computing mean value coords for the rest interior points and points along the boundary
+    float dSum1 = 0.0f, dSum2 = 0.0f;
+    IDF.resize(inVerts.rows());
+
+    /* 2nd: computing mean value coords for the rest interior points and points along the boundary
+     * Here we use equation from Rustamov et. al. Interior distance using barycentric coordinates,
+     * section 5, equation (5), p. 5
+     */
     for(size_t l = 0; l < inVerts.rows(); l++)
     {
         time.Start();
         baryW2 = mvc.meanValueCoords2D(meshPoints, inVerts.row(l));
 
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:dSum1, dSum2) shared(baryW1, D_ij, baryW2) schedule(static)
+#endif
         for(int i = 0; i < D_ij.rows(); i++)
             for(int j = 0; j < D_ij.cols(); j++)
             {
@@ -330,24 +360,13 @@ void IDFdiffusion::computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const E
 
     std::cout << "Stage: starting computing IDF." << std::endl;
 
-    //computing distances on the boundary of the mesh/polygon using diffusion map;
-    Eigen::MatrixXf D_ij; D_ij.resize(eigVecs.rows(), eigVecs.rows());
-    float t = 1.0f / (8.0f * eigVals[1]);
-    float dSq = 0.0f;
-
-    std::cout << "Stage: starting computing diffusion distances on the boundary." << std::endl;
-    for(int i = 0; i < eigVecs.rows(); i++)
-        for(int j = 0; j < eigVecs.rows(); j++)
-        {
-            for(int k = 1; k < eigVecs.cols(); k++)
-            {
-                float eigDiff = eigVecs(i, k) - eigVecs(j , k);
-                dSq += std::pow(eigVals[k], 2.0f * t) * eigDiff * eigDiff;
-            }
-            D_ij(i, j) = dSq;
-            dSq = 0.0f;
-        }
-    std::cout << "Stage: finished.\n" << std::endl;
+    Eigen::MatrixXf D_ij;
+    /*here we compute pair-wise distances according to Rustamov et. al.
+    * Interior distance using barycentric coordinates, section 4, p. 4
+    * equation for diffusion distance d^2(v_i,v_j)=sum(exp(-2*l_k*t)*(phi_k(v_i) - phi_k(v_j))^2); l_k - eigen values
+    * eigVals and eigVecs are obtained as a result of the diffusion map computation on the boundary of the mesh
+    */
+    D_ij = computePairwiseDist();
 
     std::vector<Eigen::Vector3d> meshPoints;
     for(size_t i = 0; i < surfMeshV.rows(); i++)
@@ -355,7 +374,10 @@ void IDFdiffusion::computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const E
 
     IDF.resize(inVerts.rows());
 
-    //computing mean-value coordinates; 1st: compute them for the source point srcP;
+    /* Computing mean-value coordinates and barycentric interpolation
+     * to extend boundary distances to interior of the mesh;
+     * 1st: compute them for the source point srcP;
+     */
     idf::baryCoords mvc;
     Eigen::VectorXf baryW1 = mvc.meanValueCoords3D(meshPoints, faces, srcP);
 
@@ -366,7 +388,10 @@ void IDFdiffusion::computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const E
     Eigen::VectorXf baryW2;
     float dSum1 = 0.0f, dSum2 = 0.0f;
 
-    //2nd: computing mean value coords for the rest interior points and points along the boundary
+    /* 2nd: computing mean value coords for the rest interior points and points along the boundary
+     * Here we use equation from Rustamov et. al. Interior distance using barycentric coordinates,
+     * section 5, equation (5), p. 5
+     */
     for(size_t l = 0; l < inVerts.rows(); l++)
     {
         time.Start();
@@ -392,6 +417,7 @@ void IDFdiffusion::computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const E
 void IDFdiffusion::computeDiffusionMap(const dmaps::matrix_t &inPoints, const int eigVecNum, double kernelBandWidth)
 {
     std::cout << "Stage: starting computing diffusion map." << std::endl;
+
     //computing distances
     int num_threads = omp_get_num_threads();
     dmaps::distance_matrix dMatr(inPoints, num_threads);
@@ -405,8 +431,11 @@ void IDFdiffusion::computeDiffusionMap(const dmaps::matrix_t &inPoints, const in
     diffMap.set_kernel_bandwidth(kernelBandWidth);
     diffMap.compute(eigVecNum, 1.0, 0.0);
 
-    eigVals = diffMap.get_eigenvalues();
-    eigVecs = diffMap.get_eigenvectors();
+    //change the order of the stored values to non-decreasing forboth eigen vectors and eigen values
+    eigVals = diffMap.get_eigenvalues().reverse().eval();
+    dmaps::matrix_t eigVecs0 = diffMap.get_eigenvectors();
+    eigVecs = eigVecs0.rowwise().reverse().eval();
+
     std::cout << "Stage: finished.\n" << std::endl;
 }
 
@@ -434,10 +463,11 @@ void IDFdiffusion::plotIDF3D(int isoNum)
 void IDFdiffusion::plotDiffusionMap()
 {
     std::vector<float> vecXn, vecYn;
+    int iCol = eigVecs.cols()-1;
     for(int i = 0; i < eigVecs.rows(); i++)
     {
-        vecXn.push_back(eigVecs(i, 1) / eigVecs(i, 0));
-        vecYn.push_back(eigVecs(i, 2) / eigVecs(i, 0));
+        vecXn.push_back(eigVecs(i, iCol-1) / eigVecs(i, iCol));
+        vecYn.push_back(eigVecs(i, iCol-2) / eigVecs(i, iCol));
     }
     matplotlibcpp::scatter(vecXn, vecYn);
     matplotlibcpp::show();
@@ -504,4 +534,4 @@ bool IDFdiffusion::key_down(igl::opengl::glfw::Viewer &viewer, unsigned char key
       return true;
 }
 
-} // namespace hfrep
+} // namespace idf
