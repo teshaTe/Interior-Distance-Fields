@@ -67,7 +67,7 @@ static void heart3d(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj3D frep(g.nx, g.ny, g.nz, 60);
+    frep::FRepObj3D frep(g.nx, g.ny, g.nz, 70);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
@@ -117,27 +117,16 @@ int main(int argc, char *argv[])
     //computing IDF
     idf::IDFdiffusion IDF;
     Eigen::Vector2d srcP0(-1.5, 1.25);
-    //IDF.computeIDF_polygon2D(V, E, srcP0, 5, 0.1);
-    //IDF.plotDiffusionMap();
-    //IDF.plotIDF2D();
-
-    Eigen::MatrixXd Vm_in;
-    Eigen::MatrixXi Fm_in;
-    igl::readOFF("bunny_small.off", Vm_in, Fm_in);
-    Eigen::Vector3d srcP1(-2.0, 0.0, 0.0), center;
-    igl::centroid(Vm_in, Fm_in, center);
-
-    //IDF.computeIDF_mesh3D(10*Vm_in, Fm_in, srcP1, 50, 4.0);
-    //IDF.computeIDF_slice(10*Vm_in, Fm_in, center, 70, 4.0);
-    //IDF.plotDiffusionMap();
-    //IDF.plotIDF3D(100);
+    IDF.computeIDF_polygon2D(V, E, srcP0, 5, 0.1);
+    IDF.plotDiffusionMap();
+    IDF.plotIDF2D();
 
     //******************************************************************************************
     //II. This example is dedicated to computing IDFs using function representation (FRep) in 2D;
     //******************************************************************************************
 
     Eigen::Vector2d srcP2(0.4, 0.0);
-    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(256, 256, 256), srcP2, 80, 0.005);
+    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(256, 256, 256), srcP2, 20, 0.1);
     IDF.plotDiffusionMap();
     IDF.plotIDF2D(60);
 
@@ -146,12 +135,11 @@ int main(int argc, char *argv[])
     //************************************************************************
 
     Eigen::Vector3d srcP3(0.0, 0.0, 0.0);
-    //IDF.computeIDF_mesh3D(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 140, 0.1);
-    //IDF.plotDiffusionMap();
-    //IDF.plotIDF3D(400);
+    IDF.computeIDF_mesh3D(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 20, 0.1);
+    IDF.plotDiffusionMap();
+    IDF.plotIDF3D(60);
 
-    //IDF.computeIDF_slice(heart3d, srcP2, Eigen::Vector3i(128, 128, 128), 0.0, 82, 4.0);
-    //IDF.plotIDF3D(70);
+    IDF.computeIDF_slice(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 20, 0.1);
 
     return 0;
 }
