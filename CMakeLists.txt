@@ -38,7 +38,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -qopt-report=5 -xCORE-AVX2")
 endif()
 
-link_directories("${CMAKE_CURRENT_SOURCE_DIR}/HIDF/external/libIgl/lib")
+link_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/external/libIgl/lib")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/external/libIgl/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/external")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/IDF/include")
