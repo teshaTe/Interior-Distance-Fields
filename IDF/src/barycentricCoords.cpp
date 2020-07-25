@@ -8,52 +8,6 @@
 
 namespace idf {
 
-// function written by John Burkardt
-// https://people.sc.fsu.edu/~jburkardt/cpp_src/triangle_interpolate/triangle_interpolate.html
-// Licensing: This code is distributed under the GNU LGPL license.
-void baryCoords::r8vec_uniform_01(int nP, int &seed, baryCoords::eigVector_t &v)
-{
-    const int i4_huge = 2147483647;
-    if(seed == 0)
-    {
-        std::cerr << "\nERROR <r8vec_uniform_01()>: input param 'seed' != 0.0 !" << std::endl;
-        exit(1);
-    }
-
-    for(size_t i = 0; i < nP; i++)
-    {
-        int k = seed / 127773;
-        seed = 16807 * (seed - k*127773) - k*2836;
-        if(seed < 0)
-            seed = seed + i4_huge;
-        v[i] = static_cast<float>(seed) * 4.656612875E-10;
-    }
-}
-
-// function based on the code written by John Burkardt
-// https://people.sc.fsu.edu/~jburkardt/cpp_src/triangle_interpolate/triangle_interpolate.html
-// Licensing: This code is distributed under the GNU LGPL license.
-std::vector<Eigen::Vector2d> baryCoords::uniformPointDistrTriangle(Eigen::Vector2d p1, Eigen::Vector2d p2, Eigen::Vector2d p3, int nP, int &seed)
-{
-    std::vector<Eigen::Vector2d> resPoints;
-    eigVector_t r; r.resize(2);
-    for(size_t j = 0; j < nP; j++)
-    {
-        r8vec_uniform_01(2, seed, r);
-        r[1] = std::sqrt(r[1]);
-        float a = 1.0f - r[1];
-        float b = (1.0f - r[0])*r[1];
-        float c = r[0] * r[1];
-
-        Eigen::Vector2d point;
-        point.x() = a*p1.x() + b*p2.x() + c*p3.x();
-        point.y() = a*p1.y() + b*p2.y() + c*p3.y();
-        resPoints.push_back(point);
-    }
-
-    return resPoints;
-}
-
 std::vector<Eigen::Vector2d> baryCoords::getTriangleVerts(Eigen::MatrixXd V, Eigen::Vector3i F)
 {
     std::vector<Eigen::Vector2d> triangleVert;
@@ -66,7 +20,7 @@ std::vector<Eigen::Vector2d> baryCoords::getTriangleVerts(Eigen::MatrixXd V, Eig
     return triangleVert;
 }
 
-Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p )
+Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p)
 {
     Eigen::VectorXf baryCoords;
     size_t size = polyCoords.size();
@@ -80,7 +34,7 @@ Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d>
     eigMatrix_t s; s.resize(polyCoords.size(), 2);
     eigVector_t ri; ri.resize(size);
 
-    for( size_t i = 0; i < size; i++ )
+    for(size_t i = 0; i < size; i++)
     {
         s.row(i) = (polyCoords[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
@@ -94,17 +48,17 @@ Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d>
     eigVector_t Di; Di.resize(size);
     eigVector_t Ti; Ti.resize(size);
 
-    for( size_t i = 0; i < size; i++ )
+    for(size_t i = 0; i < size; i++)
     {
         const size_t iP = (i+1) % size;
-        Ai[i] = 0.5f * ( s(i, 0) * s(iP, 1) - s(iP, 0) * s(i, 1) ); // square area of the triangle through vector multiplication and its determinant def
-        Di[i] = s.row(iP).dot(s.row(i)); //dot product of two vectors
+        Ai[i] = 0.5f * (s(i, 0) * s(iP, 1) - s(iP, 0) * s(i, 1)); // square area of the triangle through vector multiplication and its determinant def
+        Di[i] = s.row(i).dot(s.row(iP)); //dot product of two vectors
 
         //computing tan(a_i/2) = sin(a_i) / (1 + cos(a_i));
-        //assert( std::abs(ri[i] * ri[iP] + Di[i]) > 0.0 );
-        //Ti[i] = Ai[i] / (ri[i] * ri[iP] + Di[i]);
+        //assert(std::abs(ri[i] * ri[iP] + Di[i]) > 0.0);
+        Ti[i] = Ai[i] / (ri[i] * ri[iP] + Di[i]);
         assert(std::abs(Ai[i]) > 0.0f);
-        Ti[i] = (ri[i] * ri[iP] - Di[i]) / Ai[i];
+        //Ti[i] = (ri[i] * ri[iP] - Di[i]) / Ai[i];
     }
 
     eigVector_t w; w.resize(size);
@@ -122,6 +76,7 @@ Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d>
     //computing barycentric coordinates
     assert(std::abs(W) > 0.0f);
     const float invW = 1.0 / W;
+
     for(size_t i = 0; i < size; i++)
         baryCoords[i] = w[i] * invW; // equation 13 from the paper, p 10
 
@@ -137,11 +92,11 @@ bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d>
 
     eigMatrix_t s; s.resize(size, 2);
     eigVector_t ri; ri.resize(size);
-    for( size_t i = 0; i < size; i++ )
+    for(size_t i = 0; i < size; i++)
     {
         s.row(i) = (polyCoords[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
-        if( std::abs(ri[i]) < eps )
+        if(std::abs(ri[i]) < eps)
         {
             baryCoords[i] = 1.0f;
             return true;
@@ -151,15 +106,17 @@ bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d>
     eigVector_t Ai; Ai.resize(size);
     eigVector_t Di; Di.resize(size);
 
-    for( size_t i = 0; i < size; i++ )
+    for(size_t i = 0; i < size; i++)
     {
-        const size_t iP   = (i+1) % size;
-        Ai[i] = 0.5f * ( s(i, 0)*s(iP, 1) - s(i, 1)*s(iP, 0) ); // square area of the triangle through vector multiplication and its determinant def
-        Di[i] = s.row(iP).dot(s.row(i)); //s(iP, 0)*s(i, 0) + s(iP, 1)*s(i, 1); //dot product of two vectors
-        if( std::abs(Ai[i]) < eps && Di[i] < 0.0f )
+        const size_t iP   = (i + 1) % size;
+        Ai[i] = 0.5f * (s(i, 0) * s(iP, 1) - s(i, 1) * s(iP, 0)); // square area of the triangle through vector multiplication and its determinant def
+        Di[i] = s.row(i).dot(s.row(iP)); //s(iP, 0)*s(i, 0) + s(iP, 1)*s(i, 1); //dot product of two vectors
+
+        if(std::abs(Ai[i]) < eps && Di[i] < 0.0f)
         {
             Eigen::Vector2f s1 = (p - polyCoords[iP]).cast<float>();
             Eigen::Vector2f s2 = (polyCoords[i] - polyCoords[iP]).cast<float>();
+
             assert(std::abs(s2.squaredNorm()) > 0.0f);
 
             const float opScalar = s1.dot(s2);
@@ -174,9 +131,10 @@ bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d>
     return false;
 }
 
-Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d> &polyCoords, const Eigen::MatrixXi &faces, const Eigen::Vector3d &p)
+Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d> &polyCoords,
+                                              const Eigen::MatrixXi &faces, const Eigen::Vector3d &p)
 {
-    int size = polyCoords.size();
+    size_t size = polyCoords.size();
     Eigen::VectorXf baryCoords;
     baryCoords.resize(size);
     baryCoords.setZero();
@@ -184,12 +142,12 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
     eigMatrix_t s; s.resize(size, 3);
     eigVector_t ri; ri.resize(size);
 
-    for( size_t i = 0; i < size; i++ )
+    for(size_t i = 0; i < size; i++)
     {
         s.row(i) = (polyCoords[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
 
-        if( std::abs(ri[i]) < eps)
+        if(std::abs(ri[i]) < eps)
         {
              baryCoords[i] = 1.0f;
              return baryCoords;
@@ -248,7 +206,7 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
     //2nd: compute border baryCoords
     for(int i = 0; i < faces.rows(); i++)
     {
-        if( M_PI - halfSum[i] < eps )
+        if(M_PI - halfSum[i] < eps)
         {
             baryCoords.resize(size);
             baryCoords.setZero();
