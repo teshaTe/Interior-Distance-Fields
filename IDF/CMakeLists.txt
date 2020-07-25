@@ -26,5 +26,5 @@ set(SOURCES   src/interiorDistanceField.cpp
 add_library(IDF ${DMAPS_SRC} ${DMAPS_HRC} ${HEADERS} ${SOURCES})
 target_include_directories(IDF PRIVATE ${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
 target_link_libraries(IDF Eigen3::Eigen ${OpenGL_LIBARARIES} ${GTS_LIBRARIES} ${GLIB_LDFLAGS} gomp omp omptarget
-                      Python::Python Python::NumPy igl_tetgen glad glfw igl igl_opengl igl_opengl_glfw triangle tetgen
-                      sfml-window sfml-system sfml-graphics)
+                          Python::Python Python::NumPy igl_tetgen glad glfw igl igl_opengl igl_opengl_glfw triangle tetgen
+                          sfml-window sfml-system sfml-graphics)
