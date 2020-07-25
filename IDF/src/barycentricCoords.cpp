@@ -147,7 +147,7 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
         s.row(i) = (polyCoords[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
 
-        if(std::abs(ri[i]) < eps)
+        if(ri[i] < eps) //std::abs
         {
              baryCoords[i] = 1.0f;
              return baryCoords;
@@ -193,7 +193,7 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
 
         //computing edge length
         float l0 = std::sqrt((u1 - u2).squaredNorm());
-        float l1 = std::sqrt((u2 - u0).squaredNorm());
+        float l1 = std::sqrt((u0 - u2).squaredNorm()); //u2 - u0
         float l2 = std::sqrt((u0 - u1).squaredNorm());
 
         //computing angles
@@ -211,9 +211,20 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
             baryCoords.resize(size);
             baryCoords.setZero();
 
-            baryCoords[pid0[i]] = std::sin(theta0[i]) * ri[pid1[i]] * ri[pid2[i]];
-            baryCoords[pid1[i]] = std::sin(theta1[i]) * ri[pid2[i]] * ri[pid0[i]];
-            baryCoords[pid2[i]] = std::sin(theta2[i]) * ri[pid0[i]] * ri[pid1[i]];
+            //************************************
+            Eigen::Vector3f u0 = s.row(pid0[i]);
+            Eigen::Vector3f u1 = s.row(pid1[i]);
+            Eigen::Vector3f u2 = s.row(pid2[i]);
+
+            //computing edge length
+            float l0 = std::sqrt((u1 - u2).squaredNorm());
+            float l1 = std::sqrt((u0 - u2).squaredNorm()); //u2 - u0
+            float l2 = std::sqrt((u0 - u1).squaredNorm());
+            //*************************************
+
+            baryCoords[pid0[i]] = std::sin(theta0[i]) * l1 * l2; //ri[pid1[i]] * ri[pid2[i]];
+            baryCoords[pid1[i]] = std::sin(theta1[i]) * l0 * l2; //ri[pid2[i]] * ri[pid0[i]];
+            baryCoords[pid2[i]] = std::sin(theta2[i]) * l0 * l1; //ri[pid0[i]] * ri[pid1[i]];
             float sumW = baryCoords[pid0[i]] + baryCoords[pid1[i]] + baryCoords[pid2[i]];
 
             baryCoords[pid0[i]] /= sumW;
@@ -243,7 +254,7 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
        // assert(std::abs(sinTheta2) > 0.0f);
 
         float c0 = 2.0f * sinHalfSum * sinHalfSumSubTheta0 / (sinTheta1 * sinTheta2) - 1.0f;
-        float c1 = 2.0f * sinHalfSum * sinHalfSumSubTheta1 / (sinTheta2 * sinTheta0) - 1.0f;
+        float c1 = 2.0f * sinHalfSum * sinHalfSumSubTheta1 / (sinTheta0 * sinTheta2) - 1.0f;
         float c2 = 2.0f * sinHalfSum * sinHalfSumSubTheta2 / (sinTheta0 * sinTheta1) - 1.0f;
 
         if(std::abs(c0) > 1.0f) c0 = c0 > 0 ? 1 : -1;
@@ -268,15 +279,15 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
         float sign2 = detSign * std::sqrt(1.0f - c2*c2);
 
         // if 'p' lies on the plane of current triangle but outside it, ignore the current triangle
-        if (std::abs(sign0) < eps || std::abs(sign1) < eps || std::abs(sign2) < eps)
+        if (sign0 <= eps || sign1 <= eps || sign2 <= eps) //std::abs
         {
             i++; continue;
         }
 
         // weight
-        baryCoords[pid0[i]] += (theta0[i] - c1*theta2[i] - c2*theta1[i]) / (ri[pid0[i]] * sinTheta1 * sign2);
-        baryCoords[pid1[i]] += (theta1[i] - c2*theta0[i] - c0*theta2[i]) / (ri[pid1[i]] * sinTheta2 * sign0);
-        baryCoords[pid2[i]] += (theta2[i] - c0*theta1[i] - c1*theta0[i]) / (ri[pid2[i]] * sinTheta0 * sign1);
+        baryCoords[pid0[i]] += (theta0[i] - c1*theta2[i] - c2*theta1[i]) / (ri[pid0[i]] * sinTheta2 * sign1); //sintheta1. sign2
+        baryCoords[pid1[i]] += (theta1[i] - c0*theta2[i] - c2*theta0[i]) / (ri[pid1[i]] * sinTheta0 * sign2); //sintheta2, sign0
+        baryCoords[pid2[i]] += (theta2[i] - c0*theta1[i] - c1*theta0[i]) / (ri[pid2[i]] * sinTheta1 * sign0); //sintheta0, sign1
     }
 
     // normalize weight
@@ -299,4 +310,4 @@ Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d>
     return baryCoords;
 }
 
-}//namespace hfrep
+}//namespace idf
