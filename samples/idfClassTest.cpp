@@ -3,9 +3,11 @@
 #include "frep3D.h"
 #include "render.h"
 
+#include <igl/readOFF.h>
+#include <igl/centroid.h>
 #include <igl/opengl/glfw/Viewer.h>
-#include <igl/triangle/triangulate.h>
 #include <igl/remove_duplicates.h>
+#include <igl/copyleft/tetgen/tetrahedralize.h>
 
 #include <iostream>
 #include <functional>
@@ -21,7 +23,7 @@ static void suriken(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj2D frep0(g.nx, g.ny, 20.0);
+    frep::FRepObj2D frep0(g.nx, g.ny, 20);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
@@ -32,7 +34,7 @@ static void bat(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj2D frep0(g.nx, g.ny, 10.0);
+    frep::FRepObj2D frep0(g.nx, g.ny, 20);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
@@ -43,7 +45,7 @@ static void circle(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj2D frep0(g.nx, g.ny, 1.0);
+    frep::FRepObj2D frep0(g.nx, g.ny, 6.4);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
@@ -54,33 +56,33 @@ static void heart2d(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj2D frep0(g.nx, g.ny, 50.0);
+    frep::FRepObj2D frep0(g.nx, g.ny, 6.4);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
         f[i][j] = -frep0.heart2D(glm::f32vec2(x, y), glm::f32vec2(0,0));
 }
 
-
 static void heart3d(gdouble **f, GtsCartesianGrid g, guint k, gpointer data)
 {
     gdouble x, y, z = g.z;
     guint i, j;
-    frep::FRepObj3D frep(g.nx, g.ny, g.nz, 60.0);
+    frep::FRepObj3D frep(g.nx, g.ny, g.nz, 60);
 
    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
       for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
-        f[i][j] = -frep.heart3D(glm::f32vec3(x, y, z), glm::f32vec3(0,0,0));
+        f[i][j] = -frep.heart3D(glm::f32vec3(x, y, z), glm::f32vec3(0, 0, 0));
 }
 
-static void sphere (gdouble ** f, GtsCartesianGrid g, guint k, gpointer data)
+static void sphere(gdouble ** f, GtsCartesianGrid g, guint k, gpointer data)
 {
-  gdouble x, y, z = g.z;
-  guint i, j;
+    gdouble x, y, z = g.z;
+    guint i, j;
+    frep::FRepObj3D frep(g.nx, g.ny, g.nz, 6.4);
 
-  for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
-    for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
-      f[i][j] = x*x + y*y + z*z;
+    for (i = 0, x = g.x; i < g.nx; i++, x += g.dx)
+        for (j = 0, y = g.y; j < g.ny; j++, y += g.dy)
+            f[i][j] = -frep.sphere(glm::f32vec3(x, y, z), glm::f32vec3(0, 0, 0), 60);
 }
 
 int main(int argc, char *argv[])
@@ -114,31 +116,42 @@ int main(int argc, char *argv[])
 
     //computing IDF
     idf::IDFdiffusion IDF;
-    Eigen::Vector2d srcP(-1.5, 1.25);
-    IDF.computeIDF_polygon2D(V, E, srcP, 5, 0.1);
-    IDF.plotDiffusionMap();
-    IDF.plotIDF2D();
+    Eigen::Vector2d srcP0(-1.5, 1.25);
+    //IDF.computeIDF_polygon2D(V, E, srcP0, 5, 0.1);
+    //IDF.plotDiffusionMap();
+    //IDF.plotIDF2D();
+
+    Eigen::MatrixXd Vm_in;
+    Eigen::MatrixXi Fm_in;
+    igl::readOFF("bunny_small.off", Vm_in, Fm_in);
+    Eigen::Vector3d srcP1(-2.0, 0.0, 0.0), center;
+    igl::centroid(Vm_in, Fm_in, center);
+
+    //IDF.computeIDF_mesh3D(10*Vm_in, Fm_in, srcP1, 50, 4.0);
+    //IDF.computeIDF_slice(10*Vm_in, Fm_in, center, 70, 4.0);
+    //IDF.plotDiffusionMap();
+    //IDF.plotIDF3D(100);
 
     //******************************************************************************************
     //II. This example is dedicated to computing IDFs using function representation (FRep) in 2D;
     //******************************************************************************************
 
-    Eigen::Vector2d srcP1(0.0, 0.0);
-    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(128, 128, 128), srcP1, 20, 4.0);
+    Eigen::Vector2d srcP2(0.4, 0.0);
+    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(256, 256, 256), srcP2, 80, 0.005);
     IDF.plotDiffusionMap();
-    IDF.plotIDF2D(70);
+    IDF.plotIDF2D(60);
 
     //************************************************************************
     //III. This example is dedicated to computing of the IDFs using FRep in 3D
     //************************************************************************
-    Eigen::MatrixXd Vm1;
-    Eigen::MatrixXi Fm1;
 
-    Eigen::Vector3d srcP2(0.5, 1.0, 0);
-    IDF.computeIDF_mesh3D(heart3d, srcP1, Eigen::Vector3i(128, 128, 128), 0.0, 50, 4.0);
-    IDF.plotIDF3D(70);
-
-    //IDF.computeIDF_slice(heart, srcP1, Eigen::Vector3i(128, 128, 128), 0.0, 50, 4.0 );
+    Eigen::Vector3d srcP3(0.0, 0.0, 0.0);
+    //IDF.computeIDF_mesh3D(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 140, 0.1);
     //IDF.plotDiffusionMap();
+    //IDF.plotIDF3D(400);
+
+    //IDF.computeIDF_slice(heart3d, srcP2, Eigen::Vector3i(128, 128, 128), 0.0, 82, 4.0);
+    //IDF.plotIDF3D(70);
+
     return 0;
 }
