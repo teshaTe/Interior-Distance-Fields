@@ -33,14 +33,13 @@ namespace idf {
 class IDFdiffusion
 {
 public:
-    IDFdiffusion()
+    IDFdiffusion() : slice_z(0.5)
     {
 #ifdef _OPENMP
     Eigen::initParallel();
 #endif
-    slice_z = 0.5;
     }
-    ~IDFdiffusion() {}
+    ~IDFdiffusion() = default;
 
     void computeIDF_polygon2D(const Eigen::MatrixXd &polyVerts, const Eigen::MatrixXi &meshEdges, const Eigen::Vector2d &srcP, const int eigVecNumber, double kernelBandW);
     void computeIDF_polygon2D(GtsIsoCartesianFunc func, const Eigen::Vector3i resGr, const Eigen::Vector2d &srcP, const int eigVecNumber, double kernelBandW);

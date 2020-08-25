@@ -13,7 +13,7 @@ class FRepObj2D
 {
 public:
     FRepObj2D(int resX, int resY, float scaleF);
-    ~FRepObj2D(){ }
+    ~FRepObj2D() = default;
 
     //2D primitves
     float triangle(glm::vec2 pos, glm::vec2 cent, float a, float b, float c);

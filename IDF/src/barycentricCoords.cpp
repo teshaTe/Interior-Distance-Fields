@@ -28,7 +28,8 @@ Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d>
     baryCoords.setZero();
 
     //computing boundary coordinates
-    if(computeBoundaryCoordinates2D(polyCoords, p, baryCoords)) return baryCoords;
+    if(computeBoundaryCoordinates2D(polyCoords, p, baryCoords))
+        return baryCoords;
 
     //computing point in interior of the polygon
     eigMatrix_t s; s.resize(polyCoords.size(), 2);

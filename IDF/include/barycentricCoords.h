@@ -26,8 +26,8 @@
      using eigMatrix_t = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>;
 
  public:
-     baryCoords() { eps = 1.0e-8f; }
-     ~baryCoords(){}
+     baryCoords() : eps(1.0e-8f) {}
+     ~baryCoords() = default;
 
      std::vector<Eigen::Vector2d> getTriangleVerts(Eigen::MatrixXd V, Eigen::Vector3i F);
 

@@ -4,12 +4,7 @@
 
 namespace frep {
 
-FRepObj2D::FRepObj2D(int resX, int resY, float scaleF)
-{
-    resolutionX = resX;
-    resolutionY = resY;
-    scale       = scaleF;
-}
+FRepObj2D::FRepObj2D(int resX, int resY, float scaleF) : resolutionX(resX), resolutionY(resY), scale(scaleF) {}
 
 float FRepObj2D::triangle(glm::vec2 pos, glm::vec2 cent, float a, float b, float c)
 {
