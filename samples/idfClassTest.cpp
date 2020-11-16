@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
     //computing IDF
     idf::IDFdiffusion IDF;
     Eigen::Vector2d srcP0(-1.5, 1.25);
-    IDF.computeIDF_polygon2D(V, E, srcP0, 5, 0.1);
+    IDF.computeIDF_polygon2D(V, E, srcP0, 7, 0.09);
     IDF.plotDiffusionMap();
     IDF.plotIDF2D();
 
@@ -126,20 +126,21 @@ int main(int argc, char *argv[])
     //******************************************************************************************
 
     Eigen::Vector2d srcP2(0.4, 0.0);
-    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(256, 256, 256), srcP2, 20, 0.1);
+    IDF.computeIDF_polygon2D(suriken, Eigen::Vector3i(256, 256, 256), srcP2, 7, 0.1);
     IDF.plotDiffusionMap();
-    IDF.plotIDF2D(60);
+    IDF.plotIDF2D(30);
 
     //************************************************************************
     //III. This example is dedicated to computing of the IDFs using FRep in 3D
     //************************************************************************
 
     Eigen::Vector3d srcP3(0.0, 0.0, 0.0);
-    IDF.computeIDF_mesh3D(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 20, 0.1);
+    IDF.computeIDF_mesh3D(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 7, 0.1);
     IDF.plotDiffusionMap();
     IDF.plotIDF3D(60);
 
-    IDF.computeIDF_slice(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 20, 0.1);
+    IDF.setIsolinesNumber(30);
+    IDF.computeIDF_slice(heart3d, srcP3, Eigen::Vector3i(128, 128, 128), 0.0, 7, 0.1);
 
     return 0;
 }
