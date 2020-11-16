@@ -7,37 +7,23 @@
 #include <iostream>
 
 namespace idf {
-
-std::vector<Eigen::Vector2d> baryCoords::getTriangleVerts(Eigen::MatrixXd V, Eigen::Vector3i F)
-{
-    std::vector<Eigen::Vector2d> triangleVert;
-    for(size_t j = 0; j < 3; j++)
-    {
-        int vInd = F[j];
-        Eigen::Vector2d p = V.row(vInd);
-        triangleVert.push_back(p);
-    }
-    return triangleVert;
-}
-
-Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p)
+Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d> surfMeshPoints, const Eigen::Vector2d p)
 {
     Eigen::VectorXf baryCoords;
-    size_t size = polyCoords.size();
+    size_t size = surfMeshPoints.size();
     baryCoords.resize(size);
     baryCoords.setZero();
 
     //computing boundary coordinates
-    if(computeBoundaryCoordinates2D(polyCoords, p, baryCoords))
-        return baryCoords;
+    if(computeBoundaryCoordinates2D(surfMeshPoints, p, baryCoords)) return baryCoords;
 
     //computing point in interior of the polygon
-    eigMatrix_t s; s.resize(polyCoords.size(), 2);
+    eigMatrix_t s; s.resize(surfMeshPoints.size(), 2);
     eigVector_t ri; ri.resize(size);
 
     for(size_t i = 0; i < size; i++)
     {
-        s.row(i) = (polyCoords[i] - p).cast<float>();
+        s.row(i) = (surfMeshPoints[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
     }
 
@@ -84,18 +70,19 @@ Eigen::VectorXf baryCoords::meanValueCoords2D(const std::vector<Eigen::Vector2d>
     return baryCoords;
 }
 
-bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p,
-                                              Eigen::VectorXf &baryCoords)
+bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d> surfMeshPoints,
+                                              const Eigen::Vector2d p, Eigen::VectorXf &baryCoords)
 {
-    size_t size = polyCoords.size();
+    size_t size = surfMeshPoints.size();
     baryCoords.resize(size);
     baryCoords.setZero();
 
     eigMatrix_t s; s.resize(size, 2);
     eigVector_t ri; ri.resize(size);
+
     for(size_t i = 0; i < size; i++)
     {
-        s.row(i) = (polyCoords[i] - p).cast<float>();
+        s.row(i) = (surfMeshPoints[i] - p).cast<float>();
         ri[i] = std::sqrt(s.row(i).squaredNorm());
         if(std::abs(ri[i]) < eps)
         {
@@ -115,8 +102,8 @@ bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d>
 
         if(std::abs(Ai[i]) < eps && Di[i] < 0.0f)
         {
-            Eigen::Vector2f s1 = (p - polyCoords[iP]).cast<float>();
-            Eigen::Vector2f s2 = (polyCoords[i] - polyCoords[iP]).cast<float>();
+            Eigen::Vector2f s1 = (p - surfMeshPoints[iP]).cast<float>();
+            Eigen::Vector2f s2 = (surfMeshPoints[i] - surfMeshPoints[iP]).cast<float>();
 
             assert(std::abs(s2.squaredNorm()) > 0.0f);
 
@@ -132,183 +119,138 @@ bool baryCoords::computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d>
     return false;
 }
 
-Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d> &polyCoords,
-                                              const Eigen::MatrixXi &faces, const Eigen::Vector3d &p)
+Eigen::VectorXf baryCoords::meanValueCoords3D(const std::vector<Eigen::Vector3d> surfMeshPoints,
+                                              const Eigen::MatrixXi surfFaces, const Eigen::Vector3d p)
 {
-    size_t size = polyCoords.size();
-    Eigen::VectorXf baryCoords;
-    baryCoords.resize(size);
+    size_t numSurfPts = surfMeshPoints.size();
+    Eigen::VectorXf baryCoords(numSurfPts);
     baryCoords.setZero();
 
-    eigMatrix_t s; s.resize(size, 3);
-    eigVector_t ri; ri.resize(size);
+    Eigen::MatrixXd s(numSurfPts, 3);
+    Eigen::VectorXd ri(numSurfPts);
 
-    for(size_t i = 0; i < size; i++)
+    for(size_t i = 0; i < numSurfPts; i++)
     {
-        s.row(i) = (polyCoords[i] - p).cast<float>();
-        ri[i] = std::sqrt(s.row(i).squaredNorm());
+        s.row(i) = (surfMeshPoints[i] - p);
+        ri[i] = s.row(i).norm();
 
-        if(ri[i] < eps) //std::abs
+        if(ri[i] < eps)
         {
-             baryCoords[i] = 1.0f;
+             baryCoords[i] = 1.0;
              return baryCoords;
         }
-        //assert(std::abs(ri[i]) > 0.0f);
         s.row(i) /= ri[i];
     }
 
-    std::vector<float> theta0, theta1, theta2, halfSum;
-    theta0.resize(faces.rows());
-    theta1.resize(faces.rows());
-    theta2.resize(faces.rows());
-    halfSum.resize(faces.rows());
-
-    std::vector<int> pid0, pid1, pid2;
-    pid0.resize(faces.rows());
-    pid1.resize(faces.rows());
-    pid2.resize(faces.rows());
-
-    //cycle over all triangles to compute weights
+    //cycle over all triangles to compute weights (p0,p2,p2 - points of the triangle)
     //1st: compute all angles
-
-#ifdef _OPENMP
-#pragma omp parallel for simd schedule(static)
-#endif
-    for(int i = 0; i < faces.rows(); i++)
+    for(int i = 0; i < surfFaces.rows(); i++)
     {
-        //getting vertex ids
-        pid0[i] = faces.row(i).x();
-        pid1[i] = faces.row(i).y();
-        pid2[i] = faces.row(i).z();
-    }
+        int p0 = surfFaces.row(i).x(),
+            p1 = surfFaces.row(i).y(),
+            p2 = surfFaces.row(i).z();
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for(int i = 0; i < faces.rows(); i++)
-    {
-        //obtaining unit vectors using ids
-        Eigen::Vector3f u0 = s.row(pid0[i]);
-        Eigen::Vector3f u1 = s.row(pid1[i]);
-        Eigen::Vector3f u2 = s.row(pid2[i]);
-
-        //computing edge length
-        float l0 = std::sqrt((u1 - u2).squaredNorm());
-        float l1 = std::sqrt((u0 - u2).squaredNorm()); //u2 - u0
-        float l2 = std::sqrt((u0 - u1).squaredNorm());
+        //unit vectors u0,u1,u2  obtained from matrix s
+        Eigen::Vector3d edgeL = computeEdgesLength(s.row(p0), s.row(p1), s.row(p2));
 
         //computing angles
-        theta0[i] = 2.0f * std::asin(l0 / 2.0f);
-        theta1[i] = 2.0f * std::asin(l1 / 2.0f);
-        theta2[i] = 2.0f * std::asin(l2 / 2.0f);
-        halfSum[i] = (theta0[i] + theta1[i] + theta2[i]) / 2.0f;
-    }
+        double theta0 = 2.0 * std::asin(edgeL[0] / 2.0);
+        double theta1 = 2.0 * std::asin(edgeL[1] / 2.0);
+        double theta2 = 2.0 * std::asin(edgeL[2] / 2.0);
+        double halfSum = (theta0 + theta1 + theta2) / 2.0;
 
-    //2nd: compute border baryCoords
-    for(int i = 0; i < faces.rows(); i++)
-    {
-        if(M_PI - halfSum[i] < eps)
+        //2nd: compute border baryCoords
+        if(M_PI - halfSum < eps)
         {
-            baryCoords.resize(size);
+            // point p lies on triangle, use 2D barycentric coordinates
             baryCoords.setZero();
+            baryCoords[p0] = std::sin(theta0) * ri[p1] * ri[p2];
+            baryCoords[p1] = std::sin(theta1) * ri[p2] * ri[p0];
+            baryCoords[p2] = std::sin(theta2) * ri[p0] * ri[p1];
 
-            //************************************
-            Eigen::Vector3f u0 = s.row(pid0[i]);
-            Eigen::Vector3f u1 = s.row(pid1[i]);
-            Eigen::Vector3f u2 = s.row(pid2[i]);
+            double sumW = baryCoords[p0] + baryCoords[p1] + baryCoords[p2];
 
-            //computing edge length
-            float l0 = std::sqrt((u1 - u2).squaredNorm());
-            float l1 = std::sqrt((u0 - u2).squaredNorm()); //u2 - u0
-            float l2 = std::sqrt((u0 - u1).squaredNorm());
-            //*************************************
-
-            baryCoords[pid0[i]] = std::sin(theta0[i]) * l1 * l2; //ri[pid1[i]] * ri[pid2[i]];
-            baryCoords[pid1[i]] = std::sin(theta1[i]) * l0 * l2; //ri[pid2[i]] * ri[pid0[i]];
-            baryCoords[pid2[i]] = std::sin(theta2[i]) * l0 * l1; //ri[pid0[i]] * ri[pid1[i]];
-            float sumW = baryCoords[pid0[i]] + baryCoords[pid1[i]] + baryCoords[pid2[i]];
-
-            baryCoords[pid0[i]] /= sumW;
-            baryCoords[pid1[i]] /= sumW;
-            baryCoords[pid2[i]] /= sumW;
+            baryCoords[p0] /= sumW;
+            baryCoords[p1] /= sumW;
+            baryCoords[p2] /= sumW;
             return baryCoords;
         }
-    }
 
-    //3rd: computing the rest
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) shared(theta0, theta1, theta2, halfSum)
-#endif
-    for(int i = 0; i < faces.rows(); i++)
-    {
+        //3rd: computing the rest
         // coefficient
-        float sinHalfSum = std::sin(halfSum[i]);
-        float sinHalfSumSubTheta0 = std::sin(halfSum[i] - theta0[i]);
-        float sinHalfSumSubTheta1 = std::sin(halfSum[i] - theta1[i]);
-        float sinHalfSumSubTheta2 = std::sin(halfSum[i] - theta2[i]);
-        float sinTheta0 = std::sin(theta0[i]),
-              sinTheta1 = std::sin(theta1[i]),
-              sinTheta2 = std::sin(theta2[i]);
+        double sinHalfSum = std::sin(halfSum);
+        double sinHalfSumSubTheta0 = std::sin(halfSum - theta0);
+        double sinHalfSumSubTheta1 = std::sin(halfSum - theta1);
+        double sinHalfSumSubTheta2 = std::sin(halfSum - theta2);
+        double sinTheta0 = std::sin(theta0),
+               sinTheta1 = std::sin(theta1),
+               sinTheta2 = std::sin(theta2);
 
-        //assert(std::abs(sinTheta0) > 0.0f);
-        //assert(std::abs(sinTheta1) > 0.0f);
-       // assert(std::abs(sinTheta2) > 0.0f);
+        double c0 = 2.0 * sinHalfSum * sinHalfSumSubTheta0 / (sinTheta1 * sinTheta2) - 1.0;
+        double c1 = 2.0 * sinHalfSum * sinHalfSumSubTheta1 / (sinTheta2 * sinTheta0) - 1.0;
+        double c2 = 2.0 * sinHalfSum * sinHalfSumSubTheta2 / (sinTheta0 * sinTheta1) - 1.0;
 
-        float c0 = 2.0f * sinHalfSum * sinHalfSumSubTheta0 / (sinTheta1 * sinTheta2) - 1.0f;
-        float c1 = 2.0f * sinHalfSum * sinHalfSumSubTheta1 / (sinTheta0 * sinTheta2) - 1.0f;
-        float c2 = 2.0f * sinHalfSum * sinHalfSumSubTheta2 / (sinTheta0 * sinTheta1) - 1.0f;
-
-        if(std::abs(c0) > 1.0f) c0 = c0 > 0 ? 1 : -1;
-        if(std::abs(c1) > 1.0f) c1 = c1 > 0 ? 1 : -1;
-        if(std::abs(c2) > 1.0f) c2 = c2 > 0 ? 1 : -1;
+        if(std::abs(c0) > 1.0) c0 = c0 > 0.0 ? 1.0 : -1.0;
+        if(std::abs(c1) > 1.0) c1 = c1 > 0.0 ? 1.0 : -1.0;
+        if(std::abs(c2) > 1.0) c2 = c2 > 0.0 ? 1.0 : -1.0;
 
         //checking sign of the determinant of three unit vectors
-        Eigen::Matrix3f uniMatr;
-        uniMatr.row(0) = s.row(pid0[i]);
-        uniMatr.row(1) = s.row(pid1[i]);
-        uniMatr.row(2) = s.row(pid2[i]);
-        float det = uniMatr.determinant();
+        Eigen::Matrix3d uniMatr;
+        uniMatr.row(0) = s.row(p0);
+        uniMatr.row(1) = s.row(p1);
+        uniMatr.row(2) = s.row(p2);
+        double det = uniMatr.transpose().determinant();
 
-        if(std::abs(det) < eps)
+        /*if(std::abs(det) < eps)
         {
             i++; continue;
-        }
+        }*/
 
-        float detSign = det > 0 ? 1 : -1;
-        float sign0 = detSign * std::sqrt(1.0f - c0*c0);
-        float sign1 = detSign * std::sqrt(1.0f - c1*c1);
-        float sign2 = detSign * std::sqrt(1.0f - c2*c2);
+        double detSign = det > 0.0 ? 1.0 : -1.0;
+        double sign0 = detSign * std::sqrt(1.0 - c0*c0);
+        double sign1 = detSign * std::sqrt(1.0 - c1*c1);
+        double sign2 = detSign * std::sqrt(1.0 - c2*c2);
 
         // if 'p' lies on the plane of current triangle but outside it, ignore the current triangle
-        if (sign0 <= eps || sign1 <= eps || sign2 <= eps) //std::abs
+        if(std::abs(sign0) < eps || std::abs(sign1) < eps || std::abs(sign2) < eps)
         {
             i++; continue;
         }
 
         // weight
-        baryCoords[pid0[i]] += (theta0[i] - c1*theta2[i] - c2*theta1[i]) / (ri[pid0[i]] * sinTheta2 * sign1); //sintheta1. sign2
-        baryCoords[pid1[i]] += (theta1[i] - c0*theta2[i] - c2*theta0[i]) / (ri[pid1[i]] * sinTheta0 * sign2); //sintheta2, sign0
-        baryCoords[pid2[i]] += (theta2[i] - c0*theta1[i] - c1*theta0[i]) / (ri[pid2[i]] * sinTheta1 * sign0); //sintheta0, sign1
+        baryCoords[p0] += (theta0 - c1*theta2 - c2*theta1) / (ri[p0] * sinTheta1 * sign2); //sintheta1. sign2
+        baryCoords[p1] += (theta1 - c2*theta0 - c0*theta2) / (ri[p1] * sinTheta2 * sign0); //sintheta2, sign0
+        baryCoords[p2] += (theta2 - c0*theta1 - c1*theta0) / (ri[p2] * sinTheta0 * sign1); //sintheta0, sign1 */
     }
 
     // normalize weight
-    float sumWeight = 0.0;
+    double sumWeight = 0.0;
 #ifdef _OPENMP
 #pragma omp parallel for reduction(+: sumWeight)
 #endif
-    for (int i = 0; i < size; ++i)
+    for (size_t i = 0; i < numSurfPts; ++i)
         sumWeight += baryCoords[i];
 
     if(!sumWeight)
-        std::cerr << "WARNING: zero weights." << std::endl;
+        std::wcerr << "WARNING: zero weights." << std::endl;
 
 #ifdef _OPENMP
 #pragma omp parallel for simd
 #endif
-    for (int i = 0; i < size; ++i)
+    for (size_t i = 0; i < numSurfPts; ++i)
         baryCoords[i] /= sumWeight;
 
     return baryCoords;
+}
+
+Eigen::Vector3d baryCoords::computeEdgesLength(const Eigen::Vector3d u0, const Eigen::Vector3d u1, const Eigen::Vector3d u2)
+{
+    Eigen::Vector3d edgeL;
+    //computing edge length
+    edgeL[0] = (u1 - u2).norm();
+    edgeL[1] = (u2 - u0).norm();
+    edgeL[2] = (u0 - u1).norm();
+    return edgeL;
 }
 
 }//namespace idf

@@ -15,8 +15,8 @@
  */
 
 
- #include <Eigen/Core>
- #include <vector>
+#include <Eigen/Core>
+#include <vector>
 
  namespace idf
  {
@@ -26,19 +26,18 @@
      using eigMatrix_t = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>;
 
  public:
-     baryCoords() : eps(1.0e-8f) {}
-     ~baryCoords() = default;
+     baryCoords():eps(1.0e-8) { }
 
-     std::vector<Eigen::Vector2d> getTriangleVerts(Eigen::MatrixXd V, Eigen::Vector3i F);
+     Eigen::VectorXf meanValueCoords2D(const std::vector<Eigen::Vector2d> surfMeshPoints, const Eigen::Vector2d p);
+     Eigen::VectorXf meanValueCoords3D(const std::vector<Eigen::Vector3d> surfMeshPoints, const Eigen::MatrixXi surfFaces,
+                                       const Eigen::Vector3d p);
+    ~baryCoords() = default;
 
-     Eigen::VectorXf meanValueCoords2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p );
-     Eigen::VectorXf meanValueCoords3D(const std::vector<Eigen::Vector3d> &polyCoords,  const Eigen::MatrixXi &faces, const Eigen::Vector3d &p);
-
- private:
-     float eps;
-     inline float toRadians(float angle) { return angle * M_PI/180.0f; }
-     inline float toDegrees(float radians) { return radians*180.0f/M_PI; }
-     bool computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d> &polyCoords, const Eigen::Vector2d &p, Eigen::VectorXf &baryCoords);
+private:
+    double eps;
+    bool computeBoundaryCoordinates2D(const std::vector<Eigen::Vector2d> surfMeshPoints,
+                                      const Eigen::Vector2d p, Eigen::VectorXf &baryCoords);
+    Eigen::Vector3d computeEdgesLength(const Eigen::Vector3d u0, const Eigen::Vector3d u1, const Eigen::Vector3d u2);
  };
 
  } //namespace idf

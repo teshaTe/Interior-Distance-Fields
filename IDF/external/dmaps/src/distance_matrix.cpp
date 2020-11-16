@@ -124,7 +124,9 @@ vector_t distance_matrix::compute(const vector_t& coor, const std::function<f_ty
     int n = x_.rows();
     vector_t result = vector_t::Zero(n);
 
+    #ifdef _OPENMP
     #pragma omp parallel for schedule(static)
+    #endif
     for(int i = 0; i < n; ++i)
         result[i] = dist(coor, x_.row(i), w_);
 

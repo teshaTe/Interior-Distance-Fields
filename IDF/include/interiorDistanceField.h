@@ -33,13 +33,13 @@ namespace idf {
 class IDFdiffusion
 {
 public:
-    IDFdiffusion() : slice_z(0.5)
+    IDFdiffusion():m_isolines(70)
     {
 #ifdef _OPENMP
-    Eigen::initParallel();
+        Eigen::initParallel();
 #endif
+        m_slice_z = 0.5;
     }
-    ~IDFdiffusion() = default;
 
     void computeIDF_polygon2D(const Eigen::MatrixXd &polyVerts, const Eigen::MatrixXi &meshEdges, const Eigen::Vector2d &srcP, const int eigVecNumber, double kernelBandW);
     void computeIDF_polygon2D(GtsIsoCartesianFunc func, const Eigen::Vector3i resGr, const Eigen::Vector2d &srcP, const int eigVecNumber, double kernelBandW);
@@ -47,6 +47,7 @@ public:
     void computeIDF_mesh3D(const Eigen::MatrixXd &meshVerts, const Eigen::MatrixXi &meshFaces, const Eigen::Vector3d &srcP, const int eigVecNumber, double kernelBandW);
     void computeIDF_mesh3D(GtsIsoCartesianFunc func, const Eigen::Vector3d &srcP, const Eigen::Vector3i gridRes, double iso,
                            const int eigVecNumber, double kernelBandW);
+
     void computeIDF_slice(const Eigen::MatrixXd &meshVerts, const Eigen::MatrixXi &meshFaces, const Eigen::Vector3d &srcP,
                           const int eigVecNumber, double kernelBandW);
     void computeIDF_slice(GtsIsoCartesianFunc func, const Eigen::Vector3d &srcP, const Eigen::Vector3i gridRes, double iso,
@@ -60,42 +61,48 @@ public:
     void getSurfaceComponents3D(GtsIsoCartesianFunc func, const Eigen::Vector3i gridRes,
                                 double iso, Eigen::MatrixXd &V, Eigen::MatrixXi &F);
 
-    inline Eigen::VectorXf getIDF(){ return IDF; }
+    inline Eigen::VectorXf getIDF(){ return m_IDF; }
+    inline void setIsolinesNumber(int isoNum) { m_isolines = isoNum; }
+
+    ~IDFdiffusion() = default;
 
 #ifdef USE_MATPLOTLIB
     void plotDiffusionMap();
 #endif
 
 private:
-    void resetParams();
-    void computeDiffusionMap(const dmaps::matrix_t &inPoints, const int eigVecNum, double kernelBandWidth );
     void computeInteriorDF2D(const Eigen::MatrixXd &surfMeshV, const Eigen::MatrixXd &inVerts, const Eigen::VectorXd &srcP);
-    void computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const Eigen::MatrixXd &inVerts, const Eigen::MatrixXi faces, const Eigen::VectorXd &srcP);
-    void iterateIDF_slice(const Eigen::MatrixXd &surfMeshV, const Eigen::MatrixXi faces, const Eigen::VectorXd &srcP );
-    void autoSelectEigenVectors(Eigen::VectorXf &eigVals_s, Eigen::MatrixXf &eigVecs_s, const float t);
+    void computeInteriorDF3D(const Eigen::MatrixXd &surfMeshV, const Eigen::MatrixXd &inVerts, const Eigen::MatrixXi surfFaces, const Eigen::VectorXd &srcP);
+
+    void iterateIDF_slice(const Eigen::MatrixXd &surfVertices, const Eigen::MatrixXi surfFaces, const Eigen::VectorXd &srcP );
+
+    void computeDiffusionMap(const dmaps::matrix_t &inPoints, const int eigVecNum, double kernelBandWidth );
+    Eigen::MatrixXf computePairwiseDist();
+
     void update_visualization(igl::opengl::glfw::Viewer &viewer);
     void setColormap(igl::opengl::glfw::Viewer & viewer, int isoNum);
     bool key_down(igl::opengl::glfw::Viewer& viewer, unsigned char key, int modifier);
 
-    Eigen::MatrixXf computePairwiseDist();
+    void findZeroLevelSet2D(const std::vector<float> func, int resX, int resY);
+    void resetParams();
 
 private:
-    dmaps::matrix_t eigVecs;
-    dmaps::vector_t eigVals;
-    dmaps::matrix_t dist, kernelM;
+    dmaps::matrix_t m_eigVecs;
+    dmaps::vector_t m_eigVals;
+    dmaps::matrix_t m_dist, m_kernelM;
 
-    Eigen::MatrixXd V, Vm, TVm;
-    Eigen::MatrixXi F, Fm, TFm, Tm, Em;
-    Eigen::VectorXf IDF;
+    Eigen::MatrixXd m_V, m_Vm, m_TVm;
+    Eigen::MatrixXi m_F, m_Fm, m_TFm, m_Tm, m_Em;
+    Eigen::VectorXf m_IDF;
 
     //parameters for slicer
-    Eigen::MatrixXd V_surf;
-    Eigen::MatrixXi F_surf;
-    Eigen::Vector3d sP;
+    Eigen::MatrixXd m_V_surf;
+    Eigen::MatrixXi m_F_surf;
+    Eigen::Vector3d m_sP;
 
-    int isoNumb;
-    double slice_z;
+    int m_isolines;
+    double m_slice_z;
 };
 
-} // namespace idf
+} // namespace hfrep
 #endif

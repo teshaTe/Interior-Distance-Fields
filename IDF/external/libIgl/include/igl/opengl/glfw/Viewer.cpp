@@ -29,7 +29,7 @@
 #include <igl/project.h>
 #include <igl/get_seconds.h>
 #include <igl/readOBJ.h>
-#include <igl/readOFF.h>
+#include <igl/read_triangle_mesh.h>
 #include <igl/adjacency_list.h>
 #include <igl/writeOBJ.h>
 #include <igl/writeOFF.h>
@@ -405,15 +405,7 @@ namespace glfw
 
     std::string extension = mesh_file_name_string.substr(last_dot+1);
 
-    if (extension == "off" || extension =="OFF")
-    {
-      Eigen::MatrixXd V;
-      Eigen::MatrixXi F;
-      if (!igl::readOFF(mesh_file_name_string, V, F))
-        return false;
-      data().set_mesh(V,F);
-    }
-    else if (extension == "obj" || extension =="OBJ")
+    if (extension == "obj" || extension =="OBJ")
     {
       Eigen::MatrixXd corner_normals;
       Eigen::MatrixXi fNormIndices;
@@ -432,14 +424,21 @@ namespace glfw
       }
 
       data().set_mesh(V,F);
-      data().set_uv(UV_V,UV_F);
-
-    }
-    else
+      if(!UV_V.rows() != 0 && UV_F.rows() != 0)
+      {
+        data().set_uv(UV_V,UV_F);
+      }
+    }else
     {
-      // unrecognized file type
-      printf("Error: %s is not a recognized file type.\n",extension.c_str());
-      return false;
+      Eigen::MatrixXd V;
+      Eigen::MatrixXi F;
+      if (!igl::read_triangle_mesh(mesh_file_name_string, V, F))
+      {
+        // unrecognized file type
+        printf("Error: %s is not a recognized file type.\n",extension.c_str());
+        return false;
+      }
+      data().set_mesh(V,F);
     }
 
     data().compute_normals();
@@ -447,11 +446,6 @@ namespace glfw
                    Eigen::Vector3d(255.0/255.0,228.0/255.0,58.0/255.0),
                    Eigen::Vector3d(255.0/255.0,235.0/255.0,80.0/255.0));
 
-    // Alec: why?
-    if (data().V_uv.rows() == 0)
-    {
-      data().grid_texture();
-    }
     for(int i=0;i<core_list.size(); i++)
         core_list[i].align_camera_center(data().V,data().F);
 
@@ -595,10 +589,10 @@ namespace glfw
         return true;
       }
       case ';':
-        data().show_vertid = !data().show_vertid;
+        data().show_vertex_labels = !data().show_vertex_labels;
         return true;
       case ':':
-        data().show_faceid = !data().show_faceid;
+        data().show_face_labels = !data().show_face_labels;
         return true;
       default: break;//do nothing
     }
