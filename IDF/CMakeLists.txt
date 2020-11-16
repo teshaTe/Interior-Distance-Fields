@@ -14,14 +14,12 @@ set(HEADERS   include/interiorDistanceField.h
               include/barycentricCoords.h
               include/frep2D.h
               include/frep3D.h
-              include/render.h
               include/timer.hpp )
 
 set(SOURCES   src/interiorDistanceField.cpp
               src/barycentricCoords.cpp
               src/frep2D.cpp
-              src/frep3D.cpp
-              src/render.cpp )
+              src/frep3D.cpp)
 
 add_library(IDF ${DMAPS_SRC} ${DMAPS_HRC} ${HEADERS} ${SOURCES})
 target_include_directories(IDF PRIVATE ${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
